@@ -67,5 +67,5 @@ deal with them in Docker at a basic level.
 
 ## DevSecOps Implementation
 
-docker run --rm -v "C:\Users\Yaksh\Desktop\example-voting-app:/path" zricethezav/gitleaks:latest detect --source="/path" --report-path=/path/gitleaks-report.json
+docker run --rm -v "{your-file-path}" zricethezav/gitleaks:latest detect --source="/path" --report-path=/path/gitleaks-report.json
 
