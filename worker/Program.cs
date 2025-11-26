@@ -102,18 +102,27 @@ namespace Worker
             return connection;
         }
 
-        private static ConnectionMultiplexer OpenRedisConnection(string hostname)
+        private static ConnectionMultiplexer OpenRedisConnection(string hostname = "redis")
         {
-            // Use IP address to workaround https://github.com/StackExchange/StackExchange.Redis/issues/410
             var ipAddress = GetIp(hostname);
             Console.WriteLine($"Found redis at {ipAddress}");
+
+            var config = new ConfigurationOptions
+            {
+                EndPoints = { $"{ipAddress}:6379" },
+                Password = "StrongRedisPassword123",
+                AbortOnConnectFail = false,
+                ConnectRetry = 5,
+                ConnectTimeout = 5000,
+                SyncTimeout = 5000
+            };
 
             while (true)
             {
                 try
                 {
                     Console.Error.WriteLine("Connecting to redis");
-                    return ConnectionMultiplexer.Connect(ipAddress);
+                    return ConnectionMultiplexer.Connect(config);
                 }
                 catch (RedisConnectionException)
                 {
@@ -122,6 +131,7 @@ namespace Worker
                 }
             }
         }
+
 
         private static string GetIp(string hostname)
             => Dns.GetHostEntryAsync(hostname)

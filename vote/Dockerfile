@@ -11,7 +11,12 @@ WORKDIR /usr/local/app
 
 # Install our requirements.txt
 COPY requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir --upgrade pip 
+
+# Create non root user
+RUN useradd -m appuser
+USER appuser
 
 # dev defines a stage for development, where it'll watch for filesystem changes
 FROM base AS dev
@@ -27,6 +32,10 @@ COPY . .
 
 # Make port 80 available for links and/or publish
 EXPOSE 80
+
+# Adding healthchecks
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+    CMD curl -f http://localhost:80/health || exit 1
 
 # Define our command to be run when launching the container
 CMD ["gunicorn", "app:app", "-b", "0.0.0.0:80", "--log-file", "-", "--access-logfile", "-", "--workers", "4", "--keep-alive", "0"]

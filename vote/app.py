@@ -5,6 +5,7 @@ import socket
 import random
 import json
 import logging
+import secrets
 
 option_a = os.getenv('OPTION_A', "Cats")
 option_b = os.getenv('OPTION_B', "Dogs")
@@ -18,14 +19,14 @@ app.logger.setLevel(logging.INFO)
 
 def get_redis():
     if not hasattr(g, 'redis'):
-        g.redis = Redis(host="redis", db=0, socket_timeout=5)
+        g.redis = Redis(host="redis",password=os.getenv("REDIS_PASSWORD"), db=0, socket_timeout=5)
     return g.redis
 
 @app.route("/", methods=['POST','GET'])
 def hello():
     voter_id = request.cookies.get('voter_id')
     if not voter_id:
-        voter_id = hex(random.getrandbits(64))[2:-1]
+        voter_id = secrets.token_hex(8)
 
     vote = None
 
@@ -48,4 +49,6 @@ def hello():
 
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=80, debug=True, threaded=True)
+    debug_mode = os.getenv("FLASK_DEBUG", "false").lower() == "true"
+    app.run(host="0.0.0.0", port=80, debug=debug_mode, threaded=True) #nosec B104
+
