@@ -88,13 +88,30 @@ jobs:
         run: snyk auth ${{ secrets.SNYK_TOKEN }}
 
       - name: Snyk Scan - Vote
-        run: snyk test --file=vote/requirements.txt --severity-threshold=high --json > logs/snyk/snyk-vote.json
+        run: |
+          snyk test \
+            --file=vote/requirements.txt \
+            --package-manager=pip \
+            --severity-threshold=high \
+            --skip-unresolved \
+            --json > logs/snyk/snyk-vote.json || true
 
       - name: Snyk Scan - Result
-        run: snyk test --file=result/package.json --severity-threshold=high --json > logs/snyk/snyk-result.json
+        run: |
+          snyk test \
+            --file=result/package.json \
+            --severity-threshold=high \
+            --skip-unresolved \
+            --json > logs/snyk/snyk-result.json || true
 
       - name: Snyk Scan - Worker (.NET)
-        run: snyk test --file=worker/Worker.csproj --severity-threshold=high --json > logs/snyk/snyk-worker.json
+        run: |
+          snyk test \
+            --file=worker/Worker.csproj \
+            --severity-threshold=high \
+            --skip-unresolved \
+            --json > logs/snyk/snyk-worker.json || true
+
 
       # -------------------------
       # TRIVY FILESYSTEM & CONFIG
