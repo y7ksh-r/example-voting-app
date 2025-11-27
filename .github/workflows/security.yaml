@@ -62,9 +62,14 @@ jobs:
       # GITLEAKS
       # -------------------------
       - name: Run Gitleaks
-        uses: gitleaks/gitleaks-action@v2
-        with:
-          args: detect --source . --verbose --redact --report-format json --report-path logs/gitleaks/gitleaks-latest.json
+        run: |
+          gitleaks detect \
+            --source . \
+            --verbose \
+            --redact \
+            --report-format json \
+            --report-path logs/gitleaks/gitleaks-latest.json \
+            --exit-code 1
 
       # -------------------------
       # BANDIT (Python - Vote App)
