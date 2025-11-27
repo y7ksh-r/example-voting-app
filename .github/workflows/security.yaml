@@ -28,18 +28,34 @@ jobs:
       # -------------------------
       # INSTALL TOOLS
       # -------------------------
-      - name: Install dependencies (Trivy, Syft, jq)
+      - name: Install All Security Tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y wget jq gnupg lsb-release
 
+          # ---------- System deps ----------
+          sudo apt-get install -y wget curl jq git python3 python3-pip gnupg lsb-release
+
+          # ---------- Bandit ----------
+          pip3 install bandit
+
+          # ---------- Node + npm (needed for Snyk) ----------
+          sudo apt-get install -y nodejs npm
+
+          # ---------- Snyk ----------
+          npm install -g snyk
+
+          # ---------- Syft ----------
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+
+          # ---------- Trivy (official apt repo) ----------
           wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
           echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/trivy.list
           sudo apt-get update
           sudo apt-get install -y trivy
 
+          # ---------- Gitleaks ----------
+          curl -sSfL https://raw.githubusercontent.com/gitleaks/gitleaks/master/scripts/install.sh | bash -s -- -b /usr/local/bin
 
-          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
 
 
       # -------------------------
@@ -53,12 +69,6 @@ jobs:
       # -------------------------
       # BANDIT (Python - Vote App)
       # -------------------------
-      - name: Install Bandit
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y python3 python3-pip
-          pip3 install bandit
-
       - name: Run Bandit
         run: bandit -r vote/ -f json -o logs/bandit/bandit-latest.json
 
