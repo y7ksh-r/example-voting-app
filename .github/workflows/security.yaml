@@ -54,7 +54,11 @@ jobs:
           sudo apt-get install -y trivy
 
           # ---------- Gitleaks ----------
-          curl -sSfL https://raw.githubusercontent.com/gitleaks/gitleaks/master/scripts/install.sh | bash -s -- -b /usr/local/bin
+          GITLEAKS_VERSION="8.18.2"
+          wget https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz
+          tar -xvf gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz
+          sudo mv gitleaks /usr/local/bin/
+          sudo chmod +x /usr/local/bin/gitleaks
 
 
 
