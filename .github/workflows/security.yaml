@@ -20,64 +20,49 @@ jobs:
       contents: read
 
     steps:
-      # -------------------------
+      # ----------------------------------------
       # CHECKOUT
-      # -------------------------
+      # ----------------------------------------
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # -------------------------
+      # ----------------------------------------
       # DIRECTORIES
-      # -------------------------
+      # ----------------------------------------
       - name: Create logs & cache dirs
         run: |
           mkdir -p logs/gitleaks logs/bandit logs/snyk logs/trivy logs/sbom $BUILD_CACHE_PATH
 
-      # -------------------------
-      # INSTALL ALL TOOLS
-      # -------------------------
+      # ----------------------------------------
+      # INSTALL TOOLS
+      # ----------------------------------------
       - name: Install All Security Tools
         run: |
           sudo apt-get update
           sudo apt-get install -y wget curl jq git python3 python3-pip gnupg lsb-release build-essential
 
-          # Node + npm for snyk
           sudo apt-get install -y nodejs npm
-
-          # pip packages: bandit
           pip3 install bandit
-
-          # Snyk (global npm)
           npm install -g snyk
 
-          # Syft (sbom)
           curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
 
-          # Trivy via apt repo (stable)
           wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
           echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/trivy.list
           sudo apt-get update
           sudo apt-get install -y trivy
 
-          # Gitleaks (stable release binary)
           GITLEAKS_VERSION="8.18.2"
           wget -q https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz
           tar -xzf gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz
           sudo mv gitleaks /usr/local/bin/
           sudo chmod +x /usr/local/bin/gitleaks
 
-          # quick verify
-          gitleaks version || true
-          trivy --version || true
-          syft --version || true
-          snyk --version || true
-          bandit --version || true
-
-      # -------------------------
-      # OPTIONAL: Restore buildx cache (persisted between runs)
-      # -------------------------
+      # ----------------------------------------
+      # RESTORE BUILDX CACHE
+      # ----------------------------------------
       - name: Restore docker buildx cache
         uses: actions/cache@v4
         with:
@@ -86,430 +71,227 @@ jobs:
           restore-keys: |
             buildx-cache-
 
-      # -------------------------
-      # SETUP DOCKER BUILDX
-      # -------------------------
+      # ----------------------------------------
+      # SETUP BUILDX
+      # ----------------------------------------
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # -------------------------
-      # RUN GITLEAKS (manual to produce JSON)
-      # -------------------------
-      - name: Run Gitleaks (generate JSON)
-        id: gitleaks-run
+      # ----------------------------------------
+      # SCANS (Raw JSON output)
+      # ----------------------------------------
+      - name: Run Gitleaks (JSON)
         run: |
           mkdir -p logs/gitleaks
           gitleaks detect \
             --no-git \
             --config=.gitleaks.toml \
             --source . \
-            --verbose \
             --redact \
             --report-format json \
             --report-path logs/gitleaks/gitleaks-latest.json \
             --exit-code 0
 
-
-      # -------------------------
-      # RUN BANDIT (Python - vote)
-      # -------------------------
       - name: Run Bandit
         run: |
-          mkdir -p logs/bandit
           bandit -r vote/ -f json -o logs/bandit/bandit-latest.json || true
 
-      # -------------------------
-      # SNYK AUTH
-      # -------------------------
       - name: Snyk Auth
         run: snyk auth ${{ secrets.SNYK_TOKEN }}
 
-      # -------------------------
-      # SNYK TESTS (produce JSON, never hard-fail here)
-      # -------------------------
-      - name: Snyk Scan - Vote (pip)
-        run: |
-          mkdir -p logs/snyk
-          snyk test --file=vote/requirements.txt --package-manager=pip --severity-threshold=high --skip-unresolved --json > logs/snyk/snyk-vote.json || true
+      - name: Snyk Scan - Vote
+        run: snyk test --file=vote/requirements.txt --package-manager=pip --severity-threshold=high --skip-unresolved --json > logs/snyk/snyk-vote.json || true
 
-      - name: Snyk Scan - Result (npm)
-        run: |
-          snyk test --file=result/package.json --severity-threshold=high --skip-unresolved --json > logs/snyk/snyk-result.json || true
+      - name: Snyk Scan - Result
+        run: snyk test --file=result/package.json --severity-threshold=high --skip-unresolved --json > logs/snyk/snyk-result.json || true
 
-      - name: Snyk Scan - Worker (.NET)
-        run: |
-          snyk test --file=worker/Worker.csproj --severity-threshold=high --skip-unresolved --json > logs/snyk/snyk-worker.json || true
+      - name: Snyk Scan - Worker
+        run: snyk test --file=worker/Worker.csproj --severity-threshold=high --skip-unresolved --json > logs/snyk/snyk-worker.json || true
 
-      # -------------------------
-      # TRIVY FILESYSTEM & CONFIG (produce JSON, do not hard-fail)
-      # -------------------------
-      - name: Trivy FS Scan (produce JSON)
-        run: |
-          trivy fs . --severity HIGH,CRITICAL --format json --output logs/trivy/trivy-fs.json || true
+      - name: Trivy FS Scan
+        run: trivy fs . --severity HIGH,CRITICAL --format json --output logs/trivy/trivy-fs.json || true
 
-      - name: Trivy Config Scan (produce JSON)
-        run: |
-          trivy config . --severity HIGH,CRITICAL --format json --output logs/trivy/trivy-config.json || true
+      - name: Trivy Config Scan
+        run: trivy config . --severity HIGH,CRITICAL --format json --output logs/trivy/trivy-config.json || true
 
-      # -------------------------
-      # BUILD IMAGES (using buildx + local cache)
-      # -------------------------
-      - name: Build Vote image (buildx, load locally) 
-        run: |
-          docker build --progress=plain --tag $IMAGE_VOTE vote/
-        env:
-          IMAGE_VOTE: ${{ env.IMAGE_VOTE }}
+      # ----------------------------------------
+      # BUILD IMAGES
+      # ----------------------------------------
+      - name: Build Vote image
+        run: docker build --progress=plain --tag $IMAGE_VOTE vote/
 
-      - name: Build Result image (buildx, load locally)
-        run: |
-          docker build --progress=plain --tag $IMAGE_RESULT result/
-        env:
-          IMAGE_RESULT: ${{ env.IMAGE_RESULT }}
+      - name: Build Result image
+        run: docker build --progress=plain --tag $IMAGE_RESULT result/
 
-      - name: Build Worker image (buildx, load locally)
-        run: |
-          docker build --progress=plain --tag $IMAGE_WORKER worker/
-        env:
-          IMAGE_WORKER: ${{ env.IMAGE_WORKER }}
+      - name: Build Worker image
+        run: docker build --progress=plain --tag $IMAGE_WORKER worker/
 
-      # -------------------------
-      # Save build cache for next runs
-      # -------------------------
+      # ----------------------------------------
+      # SAVE BUILDX CACHE
+      # ----------------------------------------
       - name: Save docker build cache
         uses: actions/cache@v4
         with:
           path: ${{ env.BUILD_CACHE_PATH }}
           key: buildx-cache-${{ github.sha }}
 
-      # -------------------------
-      # TRIVY IMAGE SCANS (per-built image) - produce JSON (do not hard-fail)
-      # -------------------------
+      # ----------------------------------------
+      # TRIVY IMAGE SCANS
+      # ----------------------------------------
       - name: Trivy Image Scan - Vote
-        run: |
-          mkdir -p logs/trivy
-          trivy image --severity HIGH,CRITICAL --format json --output logs/trivy/trivy-image-vote.json $IMAGE_VOTE || true
+        run: trivy image --severity HIGH,CRITICAL --format json --output logs/trivy/trivy-image-vote.json $IMAGE_VOTE || true
 
       - name: Trivy Image Scan - Result
-        run: |
-          trivy image --severity HIGH,CRITICAL --format json --output logs/trivy/trivy-image-result.json $IMAGE_RESULT || true
+        run: trivy image --severity HIGH,CRITICAL --format json --output logs/trivy/trivy-image-result.json $IMAGE_RESULT || true
 
       - name: Trivy Image Scan - Worker
-        run: |
-          trivy image --severity HIGH,CRITICAL --format json --output logs/trivy/trivy-image-worker.json $IMAGE_WORKER || true
+        run: trivy image --severity HIGH,CRITICAL --format json --output logs/trivy/trivy-image-worker.json $IMAGE_WORKER || true
 
-      # -------------------------
-      # SYFT SBOM per microservice (Syft JSON + CycloneDX)
-      # -------------------------
+      # ----------------------------------------
+      # SBOM GENERATION
+      # ----------------------------------------
       - name: Syft SBOM - Vote
         run: |
-          mkdir -p logs/sbom
           syft vote/ -o json > logs/sbom/sbom-vote.json
-          syft vote/ -o cyclonedx-json > logs/sbom/sbom-vote.cdx.json || true
+          syft vote/ -o cyclonedx-json > logs/sbom/sbom-vote.cdx.json
 
       - name: Syft SBOM - Result
         run: |
           syft result/ -o json > logs/sbom/sbom-result.json
-          syft result/ -o cyclonedx-json > logs/sbom/sbom-result.cdx.json || true
+          syft result/ -o cyclonedx-json > logs/sbom/sbom-result.cdx.json
 
       - name: Syft SBOM - Worker
         run: |
           syft worker/ -o json > logs/sbom/sbom-worker.json
-          syft worker/ -o cyclonedx-json > logs/sbom/sbom-worker.cdx.json || true
+          syft worker/ -o cyclonedx-json > logs/sbom/sbom-worker.cdx.json
 
-      # -------------------------
-      # Trivy SBOM validation per service (do not hard-fail here)
-      # -------------------------
+      # ----------------------------------------
+      # TRIVY SBOM SCANS
+      # ----------------------------------------
       - name: Trivy SBOM Scan - Vote
-        run: |
-          trivy sbom logs/sbom/sbom-vote.cdx.json --severity HIGH,CRITICAL --format json --output logs/trivy/trivy-sbom-vote.json || true
+        run: trivy sbom logs/sbom/sbom-vote.cdx.json --severity HIGH,CRITICAL --format json --output logs/trivy/trivy-sbom-vote.json || true
 
       - name: Trivy SBOM Scan - Result
-        run: |
-          trivy sbom logs/sbom/sbom-result.cdx.json --severity HIGH,CRITICAL --format json --output logs/trivy/trivy-sbom-result.json || true
+        run: trivy sbom logs/sbom/sbom-result.cdx.json --severity HIGH,CRITICAL --format json --output logs/trivy/trivy-sbom-result.json || true
 
       - name: Trivy SBOM Scan - Worker
-        run: |
-          trivy sbom logs/sbom/sbom-worker.cdx.json --severity HIGH,CRITICAL --format json --output logs/trivy/trivy-sbom-worker.json || true
+        run: trivy sbom logs/sbom/sbom-worker.cdx.json --severity HIGH,CRITICAL --format json --output logs/trivy/trivy-sbom-worker.json || true
 
-      # -------------------------
-      # AGGREGATE LOGS: GITLEAKS
-      # -------------------------
+      # =====================================================
+      # LOG AGGREGATION (ALWAYS RUN)
+      # =====================================================
+
       - name: Generate Gitleaks History Log
+        if: always()
         run: |
           timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-          json_file="logs/gitleaks/gitleaks-latest.json"
-          history_file="logs/gitleaks/gitleaks-history.log"
-          echo "==== GITLEAKS SCAN $timestamp ====" >> "$history_file"
-          if [ -f "$json_file" ]; then
-            count=$(jq 'length' "$json_file")
-          else
-            count=0
-          fi
-          echo "Leaks Found: $count" >> "$history_file"
-          if [ "$count" -eq 0 ]; then
-            echo "" >> "$history_file"
-          else
-            jq -c '.[]' "$json_file" | while read -r leak; do
-              file=$(echo "$leak" | jq -r '.File')
-              line=$(echo "$leak" | jq -r '.StartLine')
-              rule=$(echo "$leak" | jq -r '.RuleID')
-              secret=$(echo "$leak" | jq -r '.Secret')
-              echo "" >> "$history_file"
-              echo "File: $file" >> "$history_file"
-              echo "Line: $line" >> "$history_file"
-              echo "Rule: $rule" >> "$history_file"
-              echo "Secret: $secret" >> "$history_file"
-            done
-            echo "" >> "$history_file"
-          fi
+          json="logs/gitleaks/gitleaks-latest.json"
+          hist="logs/gitleaks/gitleaks-history.log"
+          echo "==== GITLEAKS SCAN $timestamp ====" >> "$hist"
+          count=$(jq 'length' "$json" 2>/dev/null || echo 0)
+          echo "Leaks Found: $count" >> "$hist"
+          jq -c '.[]' "$json" >> "$hist" 2>/dev/null || true
 
-      # -------------------------
-      # AGGREGATE LOGS: BANDIT
-      # -------------------------
       - name: Generate Bandit History Log
+        if: always()
         run: |
           timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-          json_file="logs/bandit/bandit-latest.json"
-          history_file="logs/bandit/bandit-history.log"
-          echo "==== BANDIT SCAN $timestamp ====" >> "$history_file"
-          if [ -f "$json_file" ]; then
-            high=$(jq '.metrics."_totals"."SEVERITY.HIGH"' "$json_file")
-            med=$(jq '.metrics."_totals"."SEVERITY.MEDIUM"' "$json_file")
-            low=$(jq '.metrics."_totals"."SEVERITY.LOW"' "$json_file")
-            echo "High: $high" >> "$history_file"
-            echo "Medium: $med" >> "$history_file"
-            echo "Low: $low" >> "$history_file"
-            count=$(jq '.results | length' "$json_file")
-          else
-            echo "No bandit report found." >> "$history_file"
-            count=0
-          fi
-          if [ "$count" -eq 0 ]; then
-            echo "No issues found." >> "$history_file"
-            echo "" >> "$history_file"
-          else
-            jq -c '.results[]' "$json_file" | while read -r issue; do
-              file=$(echo "$issue" | jq -r '.filename')
-              line=$(echo "$issue" | jq -r '.line_number')
-              sev=$(echo "$issue" | jq -r '.issue_severity')
-              conf=$(echo "$issue" | jq -r '.issue_confidence')
-              test=$(echo "$issue" | jq -r '.test_id')
-              test_name=$(echo "$issue" | jq -r '.test_name')
-              cwe=$(echo "$issue" | jq -r '.issue_cwe.id')
-              msg=$(echo "$issue" | jq -r '.issue_text')
-              echo "" >> "$history_file"
-              echo "File: $file" >> "$history_file"
-              echo "Line: $line" >> "$history_file"
-              echo "Severity: $sev" >> "$history_file"
-              echo "Confidence: $conf" >> "$history_file"
-              echo "Test: $test - $test_name" >> "$history_file"
-              echo "CWE: $cwe" >> "$history_file"
-              echo "Message: $msg" >> "$history_file"
-            done
-            echo "" >> "$history_file"
-          fi
+          json="logs/bandit/bandit-latest.json"
+          hist="logs/bandit/bandit-history.log"
+          echo "==== BANDIT SCAN $timestamp ====" >> "$hist"
+          jq '.' "$json" >> "$hist" 2>/dev/null || true
 
-      # -------------------------
-      # AGGREGATE LOGS: SNYK
-      # -------------------------
       - name: Generate Snyk History Log
+        if: always()
         run: |
           timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-          history="logs/snyk/snyk-history.log"
-          echo "==== SNYK SCAN $timestamp ====" >> "$history"
-          for file in logs/snyk/*.json; do
-            if [ ! -f "$file" ]; then
-              echo "Skipping missing: $file" >> "$history"
-              continue
-            fi
-            echo "" >> "$history"
-            echo "Report: $(basename "$file")" >> "$history"
-            jq -c '.vulnerabilities[]?' "$file" | while read -r vuln; do
-              id=$(echo "$vuln" | jq -r '.id')
-              sev=$(echo "$vuln" | jq -r '.severity')
-              pkg=$(echo "$vuln" | jq -r '.packageName')
-              ver=$(echo "$vuln" | jq -r '.version')
-              echo "ID: $id" >> "$history"
-              echo "Severity: $sev" >> "$history"
-              echo "Package: $pkg" >> "$history"
-              echo "Version: $ver" >> "$history"
-              echo "" >> "$history"
-            done
+          hist="logs/snyk/snyk-history.log"
+          echo "==== SNYK SCAN $timestamp ====" >> "$hist"
+          for f in logs/snyk/*.json; do
+            echo "=== $(basename "$f") ===" >> "$hist"
+            jq '.' "$f" >> "$hist" 2>/dev/null || true
           done
 
-      # -------------------------
-      # AGGREGATE LOGS: TRIVY (FS, CONFIG, IMAGE, SBOM)
-      # -------------------------
       - name: Generate Trivy History Log
+        if: always()
         run: |
           timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-          history="logs/trivy/trivy-history.log"
-          echo "==== TRIVY SCAN $timestamp ====" >> "$history"
-          for file in logs/trivy/*.json; do
-            if [ ! -f "$file" ]; then
-              echo "Skipping missing: $file" >> "$history"
-              continue
-            fi
-            echo "" >> "$history"
-            echo "Report: $(basename "$file")" >> "$history"
-            jq -c '.Results[]?.Vulnerabilities[]?' "$file" 2>/dev/null | while read -r vuln; do
-              id=$(echo "$vuln" | jq -r '.VulnerabilityID')
-              sev=$(echo "$vuln" | jq -r '.Severity')
-              pkg=$(echo "$vuln" | jq -r '.PkgName')
-              ver=$(echo "$vuln" | jq -r '.InstalledVersion')
-              fix=$(echo "$vuln" | jq -r '.FixedVersion')
-              echo "ID: $id" >> "$history"
-              echo "Severity: $sev" >> "$history"
-              echo "Package: $pkg" >> "$history"
-              echo "Installed: $ver" >> "$history"
-              echo "Fixed: $fix" >> "$history"
-              echo "" >> "$history"
-            done
+          hist="logs/trivy/trivy-history.log"
+          echo "==== TRIVY SCAN $timestamp ====" >> "$hist"
+          for f in logs/trivy/*.json; do
+            echo "=== $(basename "$f") ===" >> "$hist"
+            jq '.' "$f" >> "$hist" 2>/dev/null || true
           done
 
-      # -------------------------
-      # AGGREGATE LOGS: SBOM
-      # -------------------------
       - name: Generate SBOM History Log
+        if: always()
         run: |
           timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-          history="logs/sbom/sbom-history.log"
-          echo "==== SBOM (Syft) $timestamp ====" >> "$history"
-          for file in logs/sbom/sbom-*.json; do
-            if [ ! -f "$file" ]; then
-              echo "Skipping missing: $file" >> "$history"
-              continue
-            fi
-            echo "" >> "$history"
-            echo "SBOM Report: $(basename "$file")" >> "$history"
-            jq -c '.artifacts[]?' "$file" | while read -r artifact; do
-              name=$(echo "$artifact" | jq -r '.name')
-              ver=$(echo "$artifact" | jq -r '.version')
-              type=$(echo "$artifact" | jq -r '.type')
-              echo "Package: $name" >> "$history"
-              echo "Version: $ver" >> "$history"
-              echo "Type: $type" >> "$history"
-              echo "" >> "$history"
-            done
-          done
+          hist="logs/sbom/sbom-history.log"
+          echo "==== SBOM SCAN $timestamp ====" >> "$hist"
+          for f in logs/sbom/sbom-*.json; do
+            echo "=== $(basename "$f") ===" >> "$hist"
+            jq '.' "$f" >> "$hist" 2>/dev/null || true
 
-      # -------------------------
-      # ENFORCEMENT: GITLEAKS (fail if leaks > 0)
-      # -------------------------
+      # =====================================================
+      # ENFORCEMENT (FAIL PIPELINE)
+      # =====================================================
+
       - name: Enforce Gitleaks Policy
         run: |
           json="logs/gitleaks/gitleaks-latest.json"
-          if [ -f "$json" ]; then
-            count=$(jq 'length' "$json")
-            if [ "$count" -gt 0 ]; then
-              echo "Gitleaks found $count leaks — failing pipeline."
-              jq '.' "$json" || true
-              exit 1
-            else
-              echo "Gitleaks passed (no leaks)"
-            fi
-          else
-            echo "No gitleaks JSON found; failing."
+          count=$(jq 'length' "$json" 2>/dev/null || echo 0)
+          if [ "$count" -gt 0 ]; then
+            echo "Gitleaks found leaks — failing pipeline."
             exit 1
           fi
 
-      # -------------------------
-      # ENFORCEMENT: BANDIT (fail if HIGH > 0)
-      # -------------------------
       - name: Enforce Bandit Policy
         run: |
           json="logs/bandit/bandit-latest.json"
-          if [ -f "$json" ]; then
-            high=$(jq '.metrics."_totals"."SEVERITY.HIGH"' "$json")
-            if [ "$high" -gt 0 ]; then
-              echo "Bandit found HIGH issues ($high) — failing pipeline."
-              jq '.' "$json" || true
-              exit 1
-            else
-              echo "Bandit passed (no HIGH issues)"
-            fi
-          else
-            echo "No bandit report found — failing to be safe."
+          high=$(jq '.metrics."_totals"."SEVERITY.HIGH"' "$json" 2>/dev/null || echo 0)
+          if [ "$high" -gt 0 ]; then
+            echo "Bandit HIGH issues — failing."
             exit 1
           fi
 
-      # -------------------------
-      # ENFORCEMENT: SNYK (fail if any vulnerabilities found)
-      # -------------------------
       - name: Enforce Snyk Policy
         run: |
           failed=0
-          for file in logs/snyk/*.json; do
-            if [ ! -f "$file" ]; then
-              echo "Skipping missing file: $file"
-              continue
-            fi
-            count=$(jq '.vulnerabilities | length' "$file" 2>/dev/null || echo 0)
-            if [ "$count" -gt 0 ]; then
-              echo "Snyk vulnerabilities found in $file (count=$count)"
-              failed=1
-            fi
+          for f in logs/snyk/*.json; do
+            count=$(jq '.vulnerabilities | length' "$f" 2>/dev/null || echo 0)
+            if [ "$count" -gt 0 ]; then failed=1; fi
           done
-          if [ "$failed" -ne 0 ]; then
-            echo "Snyk policy failed — failing pipeline."
-            exit 1
-          else
-            echo "Snyk passed (no high vulnerabilities)"
-          fi
+          if [ "$failed" -ne 0 ]; then exit 1; fi
 
-      # -------------------------
-      # ENFORCEMENT: TRIVY CONFIG + SBOM ONLY
-      # -------------------------
-      - name: Enforce Trivy Policy (Config + SBOM only)
+      - name: Enforce Trivy Policy (Config + SBOM)
         run: |
           failed=0
-
-          # Only enforce these files:
           files=(
             "logs/trivy/trivy-config.json"
             "logs/trivy/trivy-sbom-vote.json"
             "logs/trivy/trivy-sbom-result.json"
             "logs/trivy/trivy-sbom-worker.json"
           )
-
-          for file in "${files[@]}"; do
-            if [ ! -f "$file" ]; then
-              echo "Missing expected Trivy report: $file"
-              failed=1
-              continue
-            fi
-
-            # Count HIGH/CRITICAL results
-            count=$(jq '[.. | objects | select(.Severity=="HIGH" or .Severity=="CRITICAL" or .severity=="HIGH" or .severity=="CRITICAL")] | length' "$file" 2>/dev/null || echo 0)
-
-            if [ "$count" -gt 0 ]; then
-              echo "❌ High/Critical vulnerabilities found in: $file (count=$count)"
-              failed=1
-            else
-              echo "✔ No High/Critical issues in: $file"
-            fi
+          for f in "${files[@]}"; do
+            count=$(jq '[.. | objects | select(.Severity=="HIGH" or .Severity=="CRITICAL")] | length' "$f" 2>/dev/null || echo 0)
+            if [ "$count" -gt 0 ]; then failed=1; fi
           done
+          if [ "$failed" -ne 0 ]; then exit 1; fi
 
-          if [ "$failed" -ne 0 ]; then
-            echo "❌ Trivy policy failed — stopping pipeline."
-            exit 1
-          else
-            echo "✔ Trivy passed (no HIGH/CRITICAL issues)."
-          fi
-
-
-      # -------------------------
-      # UPLOAD ARTIFACTS (always runable if we reach here)
-      # -------------------------
+      # ----------------------------------------
+      # UPLOAD ARTIFACTS (ALWAYS)
+      # ----------------------------------------
       - name: Upload Security Reports & Logs
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: security-logs-and-reports
           path: logs/**
 
-      # -------------------------
-      # TRIGGER BUILD & PUSH PIPELINE (ONLY ON PUSH AND IF SUCCESS)
-      # -------------------------
+      # ----------------------------------------
+      # TRIGGER BUILD PIPELINE
+      # ----------------------------------------
       - name: Trigger Build & Push Pipeline
         if: github.event_name == 'push' && success()
         uses: peter-evans/repository-dispatch@v3
