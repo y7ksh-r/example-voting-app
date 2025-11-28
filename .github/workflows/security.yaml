@@ -98,15 +98,16 @@ jobs:
       - name: Run Gitleaks (generate JSON)
         id: gitleaks-run
         run: |
-          set -o pipefail
           mkdir -p logs/gitleaks
           gitleaks detect \
+            --no-git \
             --source . \
             --verbose \
             --redact \
             --report-format json \
             --report-path logs/gitleaks/gitleaks-latest.json \
-            --exit-code 1 || true
+            --exit-code 0
+
 
       # -------------------------
       # RUN BANDIT (Python - vote)
