@@ -120,7 +120,6 @@ jobs:
       # SNYK AUTH
       # -------------------------
       - name: Snyk Auth
-        if: ${{ secrets.SNYK_TOKEN != '' }}
         run: snyk auth ${{ secrets.SNYK_TOKEN }}
 
       # -------------------------
