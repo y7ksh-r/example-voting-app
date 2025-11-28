@@ -101,7 +101,7 @@ jobs:
           mkdir -p logs/gitleaks
           gitleaks detect \
             --no-git \
-            --gitleaks-ignore-path=.gitleaksignore \
+            --config=.gitleaks.toml \
             --source . \
             --verbose \
             --redact \
