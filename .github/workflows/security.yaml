@@ -101,7 +101,7 @@ jobs:
           mkdir -p logs/gitleaks
           gitleaks detect \
             --no-git \
-            --exclude-path node_modules
+            --gitleaks-ignore-path . \
             --source . \
             --verbose \
             --redact \
