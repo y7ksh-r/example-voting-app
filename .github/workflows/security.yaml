@@ -228,10 +228,19 @@ jobs:
         run: |
           timestamp=$(date '+%Y-%m-%d %H:%M:%S')
           hist="logs/sbom/sbom-history.log"
-          echo "==== SBOM SCAN $timestamp ====" >> "$hist"
+
+          echo "==== SBOM (Syft) $timestamp ====" >> "$hist"
+
           for f in logs/sbom/sbom-*.json; do
-            echo "=== $(basename "$f") ===" >> "$hist"
-            jq '.' "$f" >> "$hist" 2>/dev/null || true
+            if [ -f "$f" ]; then
+              echo "" >> "$hist"
+              echo "=== $(basename "$f") ===" >> "$hist"
+              jq '.' "$f" >> "$hist" 2>/dev/null || true
+            else
+              echo "Missing: $f" >> "$hist"
+            fi
+          done
+
 
       # =====================================================
       # ENFORCEMENT (FAIL PIPELINE)
