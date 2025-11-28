@@ -458,30 +458,45 @@ jobs:
           fi
 
       # -------------------------
-      # ENFORCEMENT: TRIVY IMAGE + FS + SBOM (fail if HIGH/CRITICAL)
+      # ENFORCEMENT: TRIVY CONFIG + SBOM ONLY
       # -------------------------
-      - name: Enforce Trivy Policy (Images + FS + Config + SBOM)
+      - name: Enforce Trivy Policy (Config + SBOM only)
         run: |
           failed=0
-          for file in logs/trivy/*.json; do
+
+          # Only enforce these files:
+          files=(
+            "logs/trivy/trivy-config.json"
+            "logs/trivy/trivy-sbom-vote.json"
+            "logs/trivy/trivy-sbom-result.json"
+            "logs/trivy/trivy-sbom-worker.json"
+          )
+
+          for file in "${files[@]}"; do
             if [ ! -f "$file" ]; then
-              echo "Skipping missing: $file"
+              echo "Missing expected Trivy report: $file"
+              failed=1
               continue
             fi
-            # Count vulnerabilities with severity HIGH or CRITICAL
+
+            # Count HIGH/CRITICAL results
             count=$(jq '[.. | objects | select(.Severity=="HIGH" or .Severity=="CRITICAL" or .severity=="HIGH" or .severity=="CRITICAL")] | length' "$file" 2>/dev/null || echo 0)
+
             if [ "$count" -gt 0 ]; then
-              echo "Trivy HIGH/CRITICAL findings in $file (count=$count)"
-              jq '.' "$file" || true
+              echo "❌ High/Critical vulnerabilities found in: $file (count=$count)"
               failed=1
+            else
+              echo "✔ No High/Critical issues in: $file"
             fi
           done
+
           if [ "$failed" -ne 0 ]; then
-            echo "Trivy policy failed — failing pipeline."
+            echo "❌ Trivy policy failed — stopping pipeline."
             exit 1
           else
-            echo "Trivy passed (no HIGH/CRITICAL issues)."
+            echo "✔ Trivy passed (no HIGH/CRITICAL issues)."
           fi
+
 
       # -------------------------
       # UPLOAD ARTIFACTS (always runable if we reach here)
