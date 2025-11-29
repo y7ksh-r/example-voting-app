@@ -6,6 +6,9 @@ RUN apt-get update \
     apache2-utils \
     && rm -rf /var/lib/apt/lists/*
 
+RUN adduser -D appuser
+USER appuser
+
 WORKDIR /seed
 
 COPY . .
