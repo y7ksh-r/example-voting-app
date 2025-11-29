@@ -139,13 +139,13 @@ jobs:
       # TRIVY IMAGE SCANS
       # ----------------------------------------
       - name: Trivy Image Scan - Vote
-        run: trivy image --severity HIGH,CRITICAL --format json --output logs/trivy/trivy-image-vote.json $IMAGE_VOTE || true
+        run: trivy image --severity HIGH,CRITICAL --ignorefile .trivyignore --format json --output logs/trivy/trivy-image-vote.json $IMAGE_VOTE || true
 
       - name: Trivy Image Scan - Result
-        run: trivy image --severity HIGH,CRITICAL --format json --output logs/trivy/trivy-image-result.json $IMAGE_RESULT || true
+        run: trivy image --severity HIGH,CRITICAL --ignorefile .trivyignore --format json --output logs/trivy/trivy-image-result.json $IMAGE_RESULT || true
 
       - name: Trivy Image Scan - Worker
-        run: trivy image --severity HIGH,CRITICAL --format json --output logs/trivy/trivy-image-worker.json $IMAGE_WORKER || true
+        run: trivy image --severity HIGH,CRITICAL --ignorefile .trivyignore --format json --output logs/trivy/trivy-image-worker.json $IMAGE_WORKER || true
 
       # ----------------------------------------
       # SBOM GENERATION
@@ -169,13 +169,13 @@ jobs:
       # TRIVY SBOM SCANS
       # ----------------------------------------
       - name: Trivy SBOM Scan - Vote
-        run: trivy sbom logs/sbom/sbom-vote.cdx.json --severity HIGH,CRITICAL --format json --output logs/trivy/trivy-sbom-vote.json || true
+        run: trivy sbom logs/sbom/sbom-vote.cdx.json --severity HIGH,CRITICAL --ignorefile .trivyignore --format json --output logs/trivy/trivy-sbom-vote.json || true
 
       - name: Trivy SBOM Scan - Result
-        run: trivy sbom logs/sbom/sbom-result.cdx.json --severity HIGH,CRITICAL --format json --output logs/trivy/trivy-sbom-result.json || true
+        run: trivy sbom logs/sbom/sbom-result.cdx.json --severity HIGH,CRITICAL --ignorefile .trivyignore --format json --output logs/trivy/trivy-sbom-result.json || true
 
       - name: Trivy SBOM Scan - Worker
-        run: trivy sbom logs/sbom/sbom-worker.cdx.json --severity HIGH,CRITICAL --format json --output logs/trivy/trivy-sbom-worker.json || true
+        run: trivy sbom logs/sbom/sbom-worker.cdx.json --severity HIGH,CRITICAL --ignorefile .trivyignore --format json --output logs/trivy/trivy-sbom-worker.json || true
 
       # =====================================================
       # LOG AGGREGATION (ALWAYS RUN)
