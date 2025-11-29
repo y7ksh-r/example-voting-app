@@ -36,6 +36,8 @@ services:
         condition: service_healthy 
     volumes:
       - ./result:/usr/local/app
+    environment:
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@db/postgres
     ports:
       - "8081:80"
       - "127.0.0.1:9229:9229"

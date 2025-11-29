@@ -17,3 +17,11 @@ spec:
       containers:
       - image: dockersamples/examplevotingapp_worker
         name: worker
+        securityContext:
+          runAsUser: 1000
+          runAsGroup: 1000
+          runAsNonRoot: true
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: [ "ALL" ]

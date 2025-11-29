@@ -14,15 +14,23 @@ spec:
       labels:
         app: redis
     spec:
+      securityContext:
+        fsGroup: 1000
       containers:
       - image: redis:alpine
         name: redis
+        securityContext:
+          runAsUser: 1000
+          runAsGroup: 1000
+          runAsNonRoot: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: [ "ALL" ]
         ports:
         - containerPort: 6379
-          name: redis
         volumeMounts:
         - mountPath: /data
           name: redis-data
       volumes:
       - name: redis-data
-        emptyDir: {} 
+        emptyDir: {}

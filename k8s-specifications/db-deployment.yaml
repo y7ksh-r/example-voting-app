@@ -14,20 +14,31 @@ spec:
       labels:
         app: db
     spec:
+      securityContext:
+        fsGroup: 1000
       containers:
       - image: postgres:15-alpine
         name: postgres
+        securityContext:
+          runAsUser: 1000
+          runAsGroup: 1000
+          runAsNonRoot: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: [ "ALL" ]
         env:
         - name: POSTGRES_USER
           value: postgres
         - name: POSTGRES_PASSWORD
-          value: postgres
+          valueFrom:
+            secretKeyRef:
+              name: pg-secret
+              key: password
         ports:
         - containerPort: 5432
-          name: postgres
         volumeMounts:
         - mountPath: /var/lib/postgresql/data
           name: db-data
       volumes:
       - name: db-data
-        emptyDir: {} 
+        emptyDir: {}
