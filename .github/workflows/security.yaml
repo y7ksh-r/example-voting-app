@@ -17,7 +17,7 @@ jobs:
     name: Run Security Scans + Build + Image Scan
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
 
     steps:
       # ----------------------------------------
@@ -305,4 +305,7 @@ jobs:
         if: github.event_name == 'push' && success()
         uses: peter-evans/repository-dispatch@v3
         with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          repository: y7ksh-r/example-voting-app
           event-type: trigger-build-pipeline
+
