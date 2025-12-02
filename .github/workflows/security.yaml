@@ -304,12 +304,12 @@ jobs:
       # ----------------------------------------
       # TRIGGER BUILD PIPELINE
       # ----------------------------------------
-      - name: Trigger Build & Push Pipeline
-        if: ${{ github.event_name == 'push' && job.status == 'success' }}
-        uses: peter-evans/repository-dispatch@v3
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          repository: y7ksh-r/example-voting-app
-          event-type: trigger-build-pipeline
+    - name: Trigger Build & Push Pipeline
+      if: ${{ github.event_name == 'push' && job.status == 'success' }}
+      uses: peter-evans/repository-dispatch@v3
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        repository: y7ksh-r/example-voting-app
+        event-type: trigger-build-pipeline
 
 
