@@ -1,0 +1,92 @@
+name: Build & Push to ECR
+
+on:
+  repository_dispatch:
+    types: [trigger-build-pipeline]
+
+env:
+  AWS_REGION: ap-south-1
+  ACCOUNT_ID: 288937191843
+
+  REPO_VOTE: example-vote
+  REPO_RESULT: example-result
+  REPO_WORKER: example-worker
+
+jobs:
+  push-to-ecr:
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write     # Required for AWS OIDC
+      contents: read
+
+    steps:
+      # ----------------------------------------
+      # CHECKOUT
+      # ----------------------------------------
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ----------------------------------------
+      # AWS OIDC AUTH (NO ACCESS KEYS)
+      # ----------------------------------------
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::<YOUR_AWS_ACCOUNT_ID_HERE>:role/GitHubOIDC
+          aws-region: ${{ env.AWS_REGION }}
+
+      # ----------------------------------------
+      # LOGIN TO ECR
+      # ----------------------------------------
+      - name: Login to Amazon ECR
+        run: |
+          aws ecr get-login-password --region $AWS_REGION \
+            | docker login \
+                --username AWS \
+                --password-stdin $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+
+      # ----------------------------------------
+      # BUILD IMAGES
+      # ----------------------------------------
+      - name: Build Vote image
+        run: docker build -t $REPO_VOTE:latest vote/
+
+      - name: Build Result image
+        run: docker build -t $REPO_RESULT:latest result/
+
+      - name: Build Worker image
+        run: docker build -t $REPO_WORKER:latest worker/
+
+      # ----------------------------------------
+      # TAG IMAGES WITH COMMIT SHA
+      # ----------------------------------------
+      - name: Tag Images (SHA)
+        run: |
+          docker tag $REPO_VOTE:latest   $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$REPO_VOTE:${{ github.sha }}
+          docker tag $REPO_RESULT:latest $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$REPO_RESULT:${{ github.sha }}
+          docker tag $REPO_WORKER:latest $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$REPO_WORKER:${{ github.sha }}
+
+      # ----------------------------------------
+      # PUSH IMAGES
+      # ----------------------------------------
+      - name: Push Images to ECR
+        run: |
+          docker push $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$REPO_VOTE:${{ github.sha }}
+          docker push $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$REPO_RESULT:${{ github.sha }}
+          docker push $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$REPO_WORKER:${{ github.sha }}
+
+      # ----------------------------------------
+      # OUTPUT ARTIFACT (USEFUL FOR ARGOCD)
+      # ----------------------------------------
+      - name: Save Image Metadata
+        run: |
+          echo "vote_sha=${{ github.sha }}" >> image-info.txt
+          echo "result_sha=${{ github.sha }}" >> image-info.txt
+          echo "worker_sha=${{ github.sha }}" >> image-info.txt
+
+      - name: Upload Image Metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-info
+          path: image-info.txt
