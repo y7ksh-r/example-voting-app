@@ -5,6 +5,11 @@ on:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
+    
+permissions:
+  contents: write
+  actions: write
+  repository_dispatch: write
 
 env:
   IMAGE_VOTE: example-voting-app-vote:latest
@@ -305,4 +310,7 @@ jobs:
         if: github.event_name == 'push' && success()
         uses: peter-evans/repository-dispatch@v3
         with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          repository: y7ksh-r/example-voting-app
           event-type: trigger-build-pipeline
+
