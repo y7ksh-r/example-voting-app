@@ -19,6 +19,10 @@ env:
 
 jobs:
   security-scans:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     name: Run Security Scans + Build + Image Scan
     runs-on: ubuntu-latest
 
